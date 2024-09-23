@@ -7,6 +7,7 @@ public class Main {
 	
 	public static void main(String[] args) 
 	{
+		System.out.println(args[0]);
 		BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
 		String status = "s";
 		while(status.equals("s"))
