@@ -14,6 +14,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { addOrder as backendAddOrder, getOrders, updateOrderStatus } from './ordersBackend';
 import { Picker } from '@react-native-picker/picker';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import Objects from './Objetcs';
 
 const Stack = createStackNavigator();
@@ -85,101 +86,115 @@ function LoginScreen({ navigation }) {
 function CustomerScreen() {
   const [nome, setNome] = useState('');
   const [items, setItems] = useState([]);
-  const [pickValue, setPickValue] = useState(Dishes[0].getName());
+  const [dishes, setDishes] = useState([]);
+  const [pickValue, setPickValue] = useState('');
   const [tableValue, setTablevalue] = useState(Tables[0]);
   const [totalOrder, setTotalOrder] = useState(0);
   const [pedidoCompleto, setPedidoCompleto] = useState('');
 
-  // Function to add item to the order
-  const addItem = () => {
-    const currentItem = Dishes.find(dish => dish.getName() === pickValue);
-    const newItem = { id: currentItem.getName(), title: currentItem.getName(), price: currentItem.getPrice() };
+  useEffect(() => {
+    loadDishes();
+  }, []);
 
-    // Call the modified addOrder function
-    addOrder(newItem);
-  }
+  const loadDishes = async () => {
+    try {
+      const storedDishes = await AsyncStorage.getItem('dishes');
+      if (storedDishes) {
+        const parsedDishes = JSON.parse(storedDishes);
+        setDishes(parsedDishes);
+        if (parsedDishes.length > 0) {
+          setPickValue(parsedDishes[0].name); // Inicializa a seleção com o primeiro prato
+        }
+      } else {
+        // Se não há pratos salvos, inicializa com o padrão
+        const initialDishes = defaultDishes.map(dish => ({ name: dish.name, price: dish.price }));
+        setDishes(initialDishes);
+        await AsyncStorage.setItem('dishes', JSON.stringify(initialDishes));
+        if (initialDishes.length > 0) {
+          setPickValue(initialDishes[0].name);
+        }
+      }
+    } catch (error) {
+      console.error('Error loading dishes:', error);
+    }
+  };
+
+  // Restante do código da tela CustomerScreen...
+
+  const addItem = () => {
+    const currentItem = dishes.find(dish => dish.name === pickValue);
+    if (currentItem) {
+      const newItem = { title: currentItem.name, price: currentItem.price };
+      addOrder(newItem);
+    }
+  };
 
   const addOrder = (item) => {
-  setItems((prevOrders) => {
-    const existingOrder = prevOrders.find(order => order.title === item.title);
-    if (existingOrder) {
-      // Atualizar a quantidade do pedido existente
-      const updatedOrders = prevOrders.map(order =>
-        order.title === item.title
-          ? { ...order, count: order.count + 1 }
-          : order
-      );
-      calculateOrderDetails(updatedOrders); // Atualiza os detalhes do pedido
-      return updatedOrders;
-    } else {
-      // Adicionar um novo pedido
-      const updatedOrders = [...prevOrders, { ...item, count: 1 }];
-      calculateOrderDetails(updatedOrders); // Atualiza os detalhes do pedido
-      return updatedOrders;
-    }
-  });
-};
+    setItems((prevOrders) => {
+      const existingOrder = prevOrders.find(order => order.title === item.title);
+      if (existingOrder) {
+        const updatedOrders = prevOrders.map(order =>
+          order.title === item.title
+            ? { ...order, count: order.count + 1 }
+            : order
+        );
+        calculateOrderDetails(updatedOrders);
+        return updatedOrders;
+      } else {
+        const updatedOrders = [...prevOrders, { ...item, count: 1 }];
+        calculateOrderDetails(updatedOrders);
+        return updatedOrders;
+      }
+    });
+  };
 
   const removeOrder = (item) => {
-  setItems((prevOrders) => {
-    const existingOrder = prevOrders.find(order => order.title === item.title);
-    if (existingOrder && existingOrder.count > 1) {
-      // Diminuir a quantidade do pedido existente
-      const updatedOrders = prevOrders.map(order =>
-        order.title === item.title
-          ? { ...order, count: order.count - 1 }
-          : order
-      );
-      calculateOrderDetails(updatedOrders); // Atualiza os detalhes do pedido
-      return updatedOrders;
-    } else {
-      // Remover o item se a quantidade for 1
-      const updatedOrders = prevOrders.filter(order => order.title !== item.title);
-      calculateOrderDetails(updatedOrders); // Atualiza os detalhes do pedido
-      return updatedOrders;
-    }
-  });
-};
+    setItems((prevOrders) => {
+      const existingOrder = prevOrders.find(order => order.title === item.title);
+      if (existingOrder && existingOrder.count > 1) {
+        const updatedOrders = prevOrders.map(order =>
+          order.title === item.title
+            ? { ...order, count: order.count - 1 }
+            : order
+        );
+        calculateOrderDetails(updatedOrders);
+        return updatedOrders;
+      } else {
+        const updatedOrders = prevOrders.filter(order => order.title !== item.title);
+        calculateOrderDetails(updatedOrders);
+        return updatedOrders;
+      }
+    });
+  };
 
-  // Function to calculate total order value and complete order string
   const calculateOrderDetails = (updatedItems) => {
     let total = 0;
     let completo = '';
 
     updatedItems.forEach((item) => {
-      total += item.price * item.count; // Multiplica o preço pela contagem
+      total += item.price * item.count;
       completo += `${item.title} x${item.count}, `;
     });
 
     setTotalOrder(total);
-    setPedidoCompleto(completo.slice(0, -2)); // Remove a última vírgula e espaço
+    setPedidoCompleto(completo.slice(0, -2));
   };
 
-  // Function to handle order submission
   const handleSubmit = () => {
-    if(nome != "")
-    {
-      if(items != "")
-      {
+    if (nome !== "") {
+      if (items.length > 0) {
         const orderDescription = `Pedido de ${nome} mesa ${tableValue} - ${pedidoCompleto} - Total: R$${totalOrder.toFixed(2)}`;
-      backendAddOrder(orderDescription); // Envia o pedido ao backend
-      alert(` O pedido de ${nome} mesa ${tableValue} foi enviado: ${pedidoCompleto}`);
-      resetOrder();
-      }
-      else
-      {
+        backendAddOrder(orderDescription); // Envia o pedido ao backend
+        alert(`O pedido de ${nome} mesa ${tableValue} foi enviado: ${pedidoCompleto}`);
+        resetOrder();
+      } else {
         alert('Escolha seu pedido!');
       }
-      
-    }
-    else
-    {
+    } else {
       alert('Digite um nome!');
     }
-    
   };
 
-  // Function to reset order state
   const resetOrder = () => {
     setNome('');
     setItems([]);
@@ -187,47 +202,44 @@ function CustomerScreen() {
     setPedidoCompleto('');
   };
 
-  // Render item for FlatList
   const renderItem = ({ item }) => (
     <View style={styles.item}>
-      <Text style={{fontSize: 20, color: '#fff'}}>- {item.title}</Text>
+      <Text style={{ fontSize: 20, color: '#fff' }}>- {item.title}</Text>
       <View style={styles.btngroup}>
         <TouchableOpacity style={styles.btn} onPress={() => removeOrder(item)}>
-      <Text style={styles.btntext} >-</Text>
-      </TouchableOpacity>
+          <Text style={styles.btntext}>-</Text>
+        </TouchableOpacity>
 
         <View style={styles.textfield}>
           <Text style={styles.btntext}>{item.count}</Text>
         </View>
 
-      <TouchableOpacity style={styles.btn } onPress={() => addOrder(item)}>
-      <Text style={styles.btntext} >+</Text>
-      </TouchableOpacity>
-      </View>   
+        <TouchableOpacity style={styles.btn} onPress={() => addOrder(item)}>
+          <Text style={styles.btntext}>+</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 
   return (
     <View style={styles.container}>
+      <View style={{ flexDirection: 'row' }}>
+        <Picker
+          selectedValue={tableValue}
+          onValueChange={(value) => setTablevalue(value)}
+          style={{ width: 80, marginBottom: 20, backgroundColor: '#fff', borderRadius: 5 }}
+        >
+          {Tables.map((table, index) => (
+            <Picker.Item key={index} label={`Mesa ${table}`} value={table} />
+          ))}
+        </Picker>
 
-      <View style={{flexDirection: 'row'}}>
-
-      <Picker
-        selectedValue={tableValue}
-        onValueChange={(value) => setTablevalue(value)}
-        style={{width: 80, marginBottom: 20, backgroundColor: '#fff', borderRadius: 5,}}
-      >
-        {Tables.map((table, index) => (
-          <Picker.Item key={index} label={`Mesa ${table}`} value={table} />
-        ))}
-      </Picker>
-
-      <TextInput
-        style={styles.input}
-        placeholder="Nome do cliente"
-        value={nome}
-        onChangeText={setNome}
-      />
+        <TextInput
+          style={styles.input}
+          placeholder="Nome do cliente"
+          value={nome}
+          onChangeText={setNome}
+        />
       </View>
 
       <Picker
@@ -235,37 +247,37 @@ function CustomerScreen() {
         onValueChange={(value) => setPickValue(value)}
         style={styles.picker}
       >
-        {Dishes.map((dish, index) => (
-          <Picker.Item key={index} label={`${dish.getName()} - R$: ${dish.getPrice().toFixed(2)}`} value={dish.getName()} />
+        {dishes.map((dish, index) => (
+          <Picker.Item key={index} label={`${dish.name} - R$: ${dish.price.toFixed(2)}`} value={dish.name} />
         ))}
       </Picker>
+
       <TouchableOpacity style={styles.submitButton} onPress={addItem}>
         <Text style={styles.submitButtonText}>Adicionar</Text>
       </TouchableOpacity>
-      <View style={{ 
-        
+
+      <View style={{
         borderWidth: 2,
         borderColor: '#fff',
-        backgroundColor: '#530A0A', 
+        backgroundColor: '#530A0A',
         padding: 15,
         width: 300,
         height: '60%',
         borderRadius: 20,
         alignItems: 'center',
-
       }}>
-          <Text style={styles.submitButtonText}>Lista de Itens</Text>
-          <FlatList
-            showsVerticalScrollIndicator={true}
-            data={items}
-            renderItem={renderItem}
-            keyExtractor={(item) => item.title + item.price} // Chave única
-            style={styles.list}
-            testID="lista"
-          />
-          <Text style={styles.submitButtonText}>Valor Total: R$ {totalOrder.toFixed(2)}</Text>
+        <Text style={styles.submitButtonText}>Lista de Itens</Text>
+        <FlatList
+          showsVerticalScrollIndicator={true}
+          data={items}
+          renderItem={renderItem}
+          keyExtractor={(item) => `${item.title}-${item.price}`}
+          style={styles.list}
+          testID="lista"
+        />
+        <Text style={styles.submitButtonText}>Valor Total: R$ {totalOrder.toFixed(2)}</Text>
       </View>
-      
+
       <TouchableOpacity style={styles.submitButton} onPress={handleSubmit}>
         <Text style={styles.submitButtonText}>Enviar Pedido</Text>
       </TouchableOpacity>
@@ -321,17 +333,75 @@ function RestaurantScreen() {
   );
 }
 
-function Admscreen()
-{
-  const [dishes, setDishes] = useState(Dishes);
+function Admscreen() {
+  const [dishes, setDishes] = useState([]);
+  const [newDish, setNewDish] = useState({ name: '', price: '' });
+  const [editingDish, setEditingDish] = useState(null);
+
+  useEffect(() => {
+    loadDishes();
+  }, []);
+
+  const loadDishes = async () => {
+    try {
+      const storedDishes = await AsyncStorage.getItem('dishes');
+      if (storedDishes) {
+        setDishes(JSON.parse(storedDishes));
+      } else {
+        // Inicialize com pratos padrão se necessário
+        setDishes([
+          { name: 'Pastel de Frango', price: 5.50 },
+          { name: 'Pastel de Carne', price: 6.20 },
+          { name: 'Pastel de Queijo', price: 4.10 },
+          { name: 'Pastel de Pizza', price: 7.70 },
+          { name: 'Coca-cola', price: 7.70 },
+        ]);
+      }
+    } catch (error) {
+      console.error('Error loading dishes:', error);
+    }
+  };
+
+  const saveDishes = async (updatedDishes) => {
+    try {
+      await AsyncStorage.setItem('dishes', JSON.stringify(updatedDishes));
+      setDishes(updatedDishes);
+    } catch (error) {
+      console.error('Error saving dishes:', error);
+    }
+  };
 
   // Função para remover o item
   const removeItem = (itemName) => {
-    // Filtra os pratos removendo o que tem o nome igual ao itemName
-    const updatedDishes = dishes.filter(item => item.getName() !== itemName);
-    // Atualiza o estado com a nova lista de pratos
-    setDishes(updatedDishes);
-    console.log(updatedDishes); // Verifica o array atualizado no console
+    const updatedDishes = dishes.filter(item => item.name !== itemName);
+    saveDishes(updatedDishes);
+  };
+
+  // Função para iniciar edição de um item
+  const startEditItem = (item) => {
+    setEditingDish({ ...item, price: item.price.toString() });
+  };
+
+  // Função para salvar edição de um item
+  const saveEditItem = () => {
+    if (editingDish) {
+      const updatedDishes = dishes.map(item =>
+        item.name === editingDish.name ? { name: editingDish.name, price: parseFloat(editingDish.price) } : item
+      );
+      saveDishes(updatedDishes);
+      setEditingDish(null);
+    }
+  };
+
+  // Função para adicionar novo item
+  const addItem = () => {
+    if (newDish.name && newDish.price) {
+      const newItem = { name: newDish.name, price: parseFloat(newDish.price) };
+      saveDishes([...dishes, newItem]);
+      setNewDish({ name: '', price: '' });
+    } else {
+      alert('Preencha o nome e o preço do prato!');
+    }
   };
 
   const renderItem = ({ item }) => (
@@ -342,61 +412,58 @@ function Admscreen()
       flexDirection: 'row',
       justifyContent: 'space-between',
       padding: 5,
-
     }}>
-      <Text style={{fontSize: 15}}>{item.getName()} - R${item.getPrice().toFixed(2)}</Text>
+      <Text style={{fontSize: 15}}>{item.name} - R${item.price.toFixed(2)}</Text>
       <View style={{flexDirection: 'row'}}>
-        <TouchableOpacity style={{backgroundColor: '#fff', marginRight:2, borderRadius: 4, alignItems: 'center'}} onPress={() => removeItem(item.getName())}>
-          <Image source={require('./assets/dustbin.png')}
-      style={ 
-        {
-          width: 20,
-          height: 20,
-        }}
-      />
+        <TouchableOpacity onPress={() => removeItem(item.name)}>
+          <Image source={require('./assets/dustbin.png')} style={{width: 20, height: 20}} />
         </TouchableOpacity>
-
-        <TouchableOpacity style={{backgroundColor: '#fff', marginLeft:2, borderRadius: 4, alignItems: 'center'}} onPress={() => removeItem(item.getName())}>
-          <Image source={require('./assets/pen.png')}
-      style={ 
-        {
-          width: 20,
-          height: 20,
-        }}
-      />
+        <TouchableOpacity onPress={() => startEditItem(item)}>
+          <Image source={require('./assets/pen.png')} style={{width: 20, height: 20}} />
         </TouchableOpacity>
       </View>
-
-      
-      
-        
     </View>
   );
-  
-  return (
-      <View style={styles.container}>
-        <View style={styles.editpanels}>
-            <Text style={styles.submitButtonText}>Cardapio</Text>
-          <FlatList
-            showsVerticalScrollIndicator={true}
-            data={Dishes}
-            renderItem={renderItem}
-            keyExtractor={(item) => item.title + item.price} // Chave única
-            style={styles.list}
-            testID="lista"
-          />
-          <TouchableOpacity style={{
-            backgroundColor: '#464646', 
-          padding: 10, 
-          borderRadius: 20,
-          marginBottom: 20,
-          marginTop: 20}}>
-            <Text style={styles.submitButtonText}>Adicionar</Text>
-          </TouchableOpacity>
 
+  return (
+    <View style={styles.container}>
+      <View style={styles.editpanels}>
+        <Text style={styles.submitButtonText}>Cardápio</Text>
+        <FlatList
+          showsVerticalScrollIndicator={true}
+          data={dishes}
+          renderItem={renderItem}
+          keyExtractor={(item) => item.name}
+          style={styles.list}
+          testID="lista"
+        />
+
+        <Text style={styles.title}>
+          {editingDish ? "Editar prato" : "Adicionar novo prato"}
+        </Text>
+
+        <View style={styles.formRow}>
+          <TextInput
+            style={styles.input}
+            placeholder="Nome do prato"
+            value={editingDish ? editingDish.name : newDish.name}
+            onChangeText={(text) => editingDish ? setEditingDish({...editingDish, name: text}) : setNewDish({...newDish, name: text})}
+          />
+          <TextInput
+            style={styles.input}
+            placeholder="Preço do prato"
+            value={editingDish ? editingDish.price : newDish.price}
+            keyboardType="numeric"
+            onChangeText={(text) => editingDish ? setEditingDish({...editingDish, price: text}) : setNewDish({...newDish, price: text})}
+          />
         </View>
+
+        <TouchableOpacity style={styles.submitButton} onPress={editingDish ? saveEditItem : addItem}>
+          <Text style={styles.submitButtonText}>{editingDish ? "Salvar" : "Adicionar"}</Text>
+        </TouchableOpacity>
       </View>
-    );
+    </View>
+  );
 }
 
 // App Component with Navigation
@@ -460,7 +527,6 @@ const styles = StyleSheet.create({
     flex: 1, 
     padding: 20,
     backgroundColor: '#F8C471',
-    
   },
 
   title: { 
@@ -485,8 +551,6 @@ const styles = StyleSheet.create({
     width: 250,
     justifyContent: 'center',
     alignItems: 'center',
-    
-    
   },
 
   buttonmid: { 
@@ -496,8 +560,6 @@ const styles = StyleSheet.create({
     width: 250,
     justifyContent: 'center',
     alignItems: 'center',
-    
-    
   },
   submitButton: { 
     backgroundColor: '#464646', 
@@ -555,9 +617,11 @@ const styles = StyleSheet.create({
   list: { 
     padding: 5,
     width: 300,
-    height: 100,
+    // Aumentando a altura da lista para permitir mais espaço para scroll
+    height: 200, 
     borderRadius: 20,
-    alignSelf:'center',
+    alignSelf: 'center',
+    width: '99%',
   }, 
   item: { 
     flexDirection: 'row',
@@ -567,8 +631,7 @@ const styles = StyleSheet.create({
     padding: 5,
     borderRadius: 10,
   },
-  btn:
-  {
+  btn: {
     backgroundColor: '#007bff', 
     width: 20,
     height: 30,
@@ -576,22 +639,19 @@ const styles = StyleSheet.create({
     borderRadius: 5, 
     borderWidth: 1,
   },
-  btntext:
-  {
+  btntext: {
     fontSize: 16,
     alignSelf: 'center', 
   },
-  textfield:
-  {
+  textfield: {
     backgroundColor: '#007bff', 
     width: 40,
     height: 30,
     backgroundColor: '#e2e2e2',
-    borderRadius: 5, // Bordas arredondadas
+    borderRadius: 5,
     borderWidth: 1,
   },
-  logo:
-  {
+  logo: {
     marginVertical: 50,
     borderWidth: 2,
     width: 150,
@@ -600,19 +660,16 @@ const styles = StyleSheet.create({
     borderColor: '#000000',
     alignSelf: 'center',
   },
-  btngroup:
-  {
+  btngroup: {
     flexDirection: 'row',
-    
   },
-  editpanels:
-  {
+  editpanels: {
     borderWidth: 2,
     borderColor: '#fff',
     backgroundColor: '#530A0A', 
     padding: 15,
     width: 300,
-    height: '40%',
+    height: '70%', // Aumentando o espaço total para incluir o título, lista e botões
     borderRadius: 20,
     alignItems: 'center',
   },
