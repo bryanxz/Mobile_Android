@@ -19,13 +19,13 @@ import Objects from './Objetcs';
 
 const Stack = createStackNavigator();
 
-// Sample Dishes
-const Dishes = [
-  new Objects('Pastel de Frango', 5.50),
-  new Objects('Pastel de Carne', 6.20),
-  new Objects('Pastel de Queijo', 4.10),
-  new Objects('Pastel de Pizza', 7.70),
-  new Objects('Coca-cola', 7.70),
+// Pratos padrão
+const defaultDishes = [
+  { name: 'Pastel de Frango', price: 5.50 },
+  { name: 'Pastel de Carne', price: 6.20 },
+  { name: 'Pastel de Queijo', price: 4.10 },
+  { name: 'Pastel de Pizza', price: 7.70 },
+  { name: 'Coca-cola', price: 7.70 },
 ];
 
 const Tables = [
@@ -37,46 +37,53 @@ const Tables = [
   '06',
 ];
 
+// Função para inicializar pratos padrão no AsyncStorage
+const initializeDefaultDishes = async () => {
+  try {
+    const storedDishes = await AsyncStorage.getItem('dishes');
+    if (!storedDishes) {
+      await AsyncStorage.setItem('dishes', JSON.stringify(defaultDishes));
+    }
+  } catch (error) {
+    console.error('Error initializing default dishes:', error);
+  }
+};
+
 // Login Screen Component
 function LoginScreen({ navigation }) {
+  useEffect(() => {
+    initializeDefaultDishes();
+  }, []);
+
   const handleLogin = (userType) => {
-    switch(userType)
-    {
+    switch(userType) {
       case 'cliente':
         navigation.navigate('Customer');
-      break;
-
+        break;
       case 'restaurante':
         navigation.navigate('Restaurante');
-      break;
-
+        break;
       case 'administrador':
         navigation.navigate('administrador');
-      break;
+        break;
     }
   };
 
   return (
     <View style={styles.container}>
-
-      <View >
-
-      <Image source={require('./assets/pastelarialogo.png')}
-      style={styles.logo}
-      />
-
-      <TouchableOpacity style={styles.buttonlarge} onPress={() => handleLogin('cliente')} >
-        <Text style={styles.submitButtonText}>Fazer Pedido</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity style={styles.buttonlarge} onPress={() => handleLogin('restaurante')} >
-        <Text style={styles.submitButtonText}>Acompanhar Pedidos</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity style={styles.buttonlarge} onPress={() => handleLogin('administrador')} >
-        <Text style={styles.submitButtonText}>Administrador</Text>
-      </TouchableOpacity>
-
+      <View>
+        <Image source={require('./assets/pastelarialogo.png')}
+          style={styles.logo}
+        />
+        <TouchableOpacity style={styles.buttonlarge} onPress={() => handleLogin('cliente')} >
+          <Text style={styles.submitButtonText}>Fazer Pedido</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.buttonlarge} onPress={() => handleLogin('restaurante')} >
+          <Text style={styles.submitButtonText}>Acompanhar Pedidos</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.buttonlarge} onPress={() => handleLogin('administrador')} >
+          <Text style={styles.submitButtonText}>Administrador</Text>
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -118,8 +125,6 @@ function CustomerScreen() {
       console.error('Error loading dishes:', error);
     }
   };
-
-  // Restante do código da tela CustomerScreen...
 
   const addItem = () => {
     const currentItem = dishes.find(dish => dish.name === pickValue);
@@ -227,7 +232,7 @@ function CustomerScreen() {
         <Picker
           selectedValue={tableValue}
           onValueChange={(value) => setTablevalue(value)}
-          style={{ width: 80, marginBottom: 20, backgroundColor: '#fff', borderRadius: 5 }}
+          style={styles.picker2}
         >
           {Tables.map((table, index) => (
             <Picker.Item key={index} label={`Mesa ${table}`} value={table} />
@@ -235,7 +240,7 @@ function CustomerScreen() {
         </Picker>
 
         <TextInput
-          style={styles.input}
+          style={styles.input3}
           placeholder="Nome do cliente"
           value={nome}
           onChangeText={setNome}
@@ -245,7 +250,7 @@ function CustomerScreen() {
       <Picker
         selectedValue={pickValue}
         onValueChange={(value) => setPickValue(value)}
-        style={styles.picker}
+        style={styles.picker3}
       >
         {dishes.map((dish, index) => (
           <Picker.Item key={index} label={`${dish.name} - R$: ${dish.price.toFixed(2)}`} value={dish.name} />
@@ -437,32 +442,35 @@ function Admscreen() {
           style={styles.list}
           testID="lista"
         />
-
-        <Text style={styles.title}>
+      </View>
+    
+      <View style={styles.editpanels2}>
+        <Text style={styles.admscreenTitle}>
           {editingDish ? "Editar prato" : "Adicionar novo prato"}
         </Text>
 
         <View style={styles.formRow}>
           <TextInput
-            style={styles.input}
+            style={styles.input2}
             placeholder="Nome do prato"
             value={editingDish ? editingDish.name : newDish.name}
             onChangeText={(text) => editingDish ? setEditingDish({...editingDish, name: text}) : setNewDish({...newDish, name: text})}
           />
           <TextInput
-            style={styles.input}
+            style={styles.input2}
             placeholder="Preço do prato"
             value={editingDish ? editingDish.price : newDish.price}
             keyboardType="numeric"
             onChangeText={(text) => editingDish ? setEditingDish({...editingDish, price: text}) : setNewDish({...newDish, price: text})}
           />
         </View>
+        
 
         <TouchableOpacity style={styles.submitButton} onPress={editingDish ? saveEditItem : addItem}>
           <Text style={styles.submitButtonText}>{editingDish ? "Salvar" : "Adicionar"}</Text>
         </TouchableOpacity>
+        </View>
       </View>
-    </View>
   );
 }
 
@@ -472,43 +480,21 @@ export default function App() {
     <NavigationContainer>
       <Stack.Navigator initialRouteName="Login" 
       screenOptions={{
-
         headerStyle: {backgroundColor: '#530A0A'},
-
         headerTintColor: '#fff'
-      }}
-      
-      >
+      }}>
         <Stack.Screen 
-        options={
-          {
-            title: '',
-          }     
-        }
-        
-        name="Login" component={LoginScreen} />
+          options={{ title: '' }} 
+          name="Login" component={LoginScreen} />
         <Stack.Screen 
-        options={
-          {
-            title: 'Fazer Pedido',
-          }
-        }
-         name="Customer" component={CustomerScreen} />
+          options={{ title: 'Fazer Pedido' }}
+          name="Customer" component={CustomerScreen} />
         <Stack.Screen 
-        options={
-          {
-            title: 'Acompanhar Pedidos',
-          }
-        }
-        name="Restaurante" component={RestaurantScreen} />
-
+          options={{ title: 'Acompanhar Pedidos' }}
+          name="Restaurante" component={RestaurantScreen} />
         <Stack.Screen 
-        options={
-          {
-            title: 'Administrador',
-          }
-        }
-         name="administrador" component={Admscreen} />
+          options={{ title: 'Administrador' }}
+          name="administrador" component={Admscreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );
@@ -543,6 +529,25 @@ const styles = StyleSheet.create({
     borderRadius: 5, 
     backgroundColor: '#fff',
     width: 220,
+  }, 
+  input2: { 
+    width: '80%', 
+    padding: 10,
+    borderWidth: 1, 
+    borderColor: '#ccc', 
+    marginBottom: 10, 
+    borderRadius: 5, 
+    backgroundColor: '#fff',
+    width: 220,
+  }, 
+  input3: { 
+    width: '80%', 
+    height: 40,
+    padding: 10,
+    marginBottom: 10, 
+    backgroundColor: '#fff',
+    width: 220,
+    
   }, 
   buttonlarge: { 
     marginBottom: 30,
@@ -610,18 +615,28 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     padding: 10,
   },
+  picker2: { 
+    height: 40, 
+    width: 150,
+    backgroundColor: '#fff',
+    padding: 10,
+  },
+  picker3: { 
+    height: 40, 
+    width: 370,
+    backgroundColor: '#fff',
+    padding: 10,
+  },
   selectedValue: { 
     marginTop: 20, 
     fontSize: 18, 
   }, 
   list: { 
     padding: 5,
-    width: 300,
-    // Aumentando a altura da lista para permitir mais espaço para scroll
+    width: '100%',
     height: 200, 
     borderRadius: 20,
     alignSelf: 'center',
-    width: '99%',
   }, 
   item: { 
     flexDirection: 'row',
@@ -632,7 +647,6 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   btn: {
-    backgroundColor: '#007bff', 
     width: 20,
     height: 30,
     backgroundColor: '#fff',
@@ -644,10 +658,9 @@ const styles = StyleSheet.create({
     alignSelf: 'center', 
   },
   textfield: {
-    backgroundColor: '#007bff', 
+    backgroundColor: '#e2e2e2',
     width: 40,
     height: 30,
-    backgroundColor: '#e2e2e2',
     borderRadius: 5,
     borderWidth: 1,
   },
@@ -669,8 +682,28 @@ const styles = StyleSheet.create({
     backgroundColor: '#530A0A', 
     padding: 15,
     width: 300,
-    height: '70%', // Aumentando o espaço total para incluir o título, lista e botões
+    height: '50%',
     borderRadius: 20,
     alignItems: 'center',
+    marginBottom: 20
+  },
+
+  editpanels2: {
+    borderWidth: 2,
+    borderColor: '#fff',
+    backgroundColor: '#530A0A', 
+    padding: 15,
+    width: 300,
+    height: '40%',
+    borderRadius: 20,
+    alignItems: 'center',
+  },
+  // Adicionando estilo específico para o texto do título na Admscreen
+  admscreenTitle: {
+    padding: 10,
+    fontSize: 18,
+    color: '#F8C471', // Cor de fundo padrão
+    fontWeight: 'bold',
+    textAlign: 'center',
   },
 });
