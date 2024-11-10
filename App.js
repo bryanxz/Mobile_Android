@@ -9,6 +9,7 @@ import {
   Button,
   TouchableOpacity,
   FlatList,
+  Platform
 } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
@@ -25,6 +26,7 @@ const defaultDishes = [
   { name: 'Pastel de Carne', price: 6.20 },
   { name: 'Pastel de Queijo', price: 4.10 },
   { name: 'Pastel de Pizza', price: 7.70 },
+  { name: 'Caldo de Cana', price: 8.30 },
   { name: 'Coca-cola', price: 7.70 },
 ];
 
@@ -76,13 +78,13 @@ function LoginScreen({ navigation }) {
           style={styles.logo}
         />
         <TouchableOpacity style={styles.buttonlarge} onPress={() => handleLogin('cliente')} >
-          <Text style={styles.submitButtonText}>Fazer Pedido</Text>
+          <Text style={styles.submitButtonText}>Anotar Pedido</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.buttonlarge} onPress={() => handleLogin('restaurante')} >
           <Text style={styles.submitButtonText}>Acompanhar Pedidos</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.buttonlarge} onPress={() => handleLogin('administrador')} >
-          <Text style={styles.submitButtonText}>Administrador</Text>
+          <Text style={styles.submitButtonText}>Cardápio</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -186,19 +188,24 @@ function CustomerScreen() {
   };
 
   const handleSubmit = () => {
-    if (nome !== "") {
-      if (items.length > 0) {
-        const orderDescription = `Pedido de ${nome} mesa ${tableValue} - ${pedidoCompleto} - Total: R$${totalOrder.toFixed(2)}`;
-        backendAddOrder(orderDescription); // Envia o pedido ao backend
-        alert(`O pedido de ${nome} mesa ${tableValue} foi enviado: ${pedidoCompleto}`);
-        resetOrder();
-      } else {
-        alert('Escolha seu pedido!');
-      }
+  if (nome !== "") {
+    if (items.length > 0) {
+      const orderDescription = `
+        Pedido de: ${nome}
+        Mesa: ${tableValue}
+        Itens: ${pedidoCompleto}
+        Total: R$${totalOrder.toFixed(2)}
+      `;
+      backendAddOrder(orderDescription); // Envia o pedido ao backend
+      alert(`O pedido de ${nome} mesa ${tableValue} foi enviado: ${pedidoCompleto}`);
+      resetOrder();
     } else {
-      alert('Digite um nome!');
+      alert('Escolha seu pedido!');
     }
-  };
+  } else {
+    alert('Digite um nome!');
+  }
+};
 
   const resetOrder = () => {
     setNome('');
@@ -292,51 +299,96 @@ function CustomerScreen() {
 
 // Restaurant Screen Component
 function RestaurantScreen() {
-  const [orders, setOrders] = useState([]);
+  const [activeOrders, setActiveOrders] = useState([]);
+  const [deliveredOrders, setDeliveredOrders] = useState([]);
 
   useEffect(() => {
-    setOrders(getOrders());
-    const interval = setInterval(() => {
-      setOrders(getOrders());
-    }, 3000);
+    const fetchData = () => {
+      const allOrders = getOrders();
+      const ongoingOrders = allOrders.filter(order => order.status !== 'Entregue');
+      const completedOrders = allOrders.filter(order => order.status === 'Entregue');
+
+      const renumberedActiveOrders = ongoingOrders.map((order, index) => ({
+        ...order,
+        displayId: index + 1,
+      }));
+
+      setActiveOrders(renumberedActiveOrders);
+      setDeliveredOrders(completedOrders);
+    };
+
+    fetchData();
+    const interval = setInterval(fetchData);
     return () => clearInterval(interval);
   }, []);
 
   const handleStatusChange = (id) => {
     updateOrderStatus(id);
-    setOrders(getOrders()); // Atualiza a lista de pedidos após a mudança de status
+    setActiveOrders(prevOrders => {
+      const updatedActiveOrders = prevOrders.filter(order => order.id !== id);
+      const updatedDeliveredOrders = [...deliveredOrders, ...prevOrders.filter(order => order.id === id)];
+
+      setDeliveredOrders(updatedDeliveredOrders.map(order => ({ ...order, status: 'Entregue' })));
+      return updatedActiveOrders.map((order, index) => ({
+        ...order,
+        displayId: index + 1,
+      }));
+    });
   };
 
   const renderOrder = ({ item }) => (
     <View key={item.id} style={styles.orderItem}>
-      <Text style={styles.itemText}>{item.id}. {item.description}</Text>
+      <Text style={styles.itemText}>
+        {item.displayId}. {item.description}
+      </Text>
+      <View style={styles.statusContainer}>
+        <Text style={styles.statusText}>Status: {item.status}</Text>
+        {item.status !== 'Entregue' && (
+          <TouchableOpacity style={styles.statusButton} onPress={() => handleStatusChange(item.id)}>
+            <Image
+              source={require('./assets/reloadicon.png')}
+              style={{ width: 25, height: 25 }} // Tamanho reduzido
+            />
+          </TouchableOpacity>
+        )}
+      </View>
+    </View>
+  );
+
+  const renderDeliveredOrder = ({ item }) => (
+    <View key={item.id} style={[styles.orderItem, styles.deliveredOrderItem]}>
+      <Text style={styles.itemText}>
+        {item.id}. {item.description}
+      </Text>
       <Text style={styles.statusText}>Status: {item.status}</Text>
-      {item.status !== 'Entregue' && (
-        <TouchableOpacity style={styles.statusButton} onPress={() => handleStatusChange(item.id)}>
-          <Image source={require('./assets/reloadicon.png')}
-      style={ 
-        {
-          width: 50,
-          height: 50,
-        }}
-      />
-        </TouchableOpacity>
-      )}
     </View>
   );
 
   return (
     <View style={styles.restaurantcontainer}>
+      <Text style={styles.sectionTitle}>Pedidos Ativos</Text>
       <FlatList
-      style={styles.list}
-        data={orders}
+        style={styles.list}
+        data={activeOrders}
         renderItem={renderOrder}
-        keyExtractor={(item) => item.id.toString()} // Gera uma chave única baseada no ID
-        contentContainerStyle={{ paddingBottom: 20 }} // Espaço no final para facilitar a rolagem
+        keyExtractor={(item) => item.id.toString()}
+        numColumns={2} // Permite múltiplos cards por linha
+        contentContainerStyle={{ paddingBottom: 5 }}
+      />
+      
+      <Text style={styles.sectionTitle}>Pedidos Entregues</Text>
+      <FlatList
+        style={styles.list}
+        data={deliveredOrders}
+        renderItem={renderDeliveredOrder}
+        keyExtractor={(item) => item.id.toString()}
+        numColumns={2} // Permite múltiplos cards por linha
+        contentContainerStyle={{ paddingBottom: 20 }}
       />
     </View>
   );
 }
+
 
 function Admscreen() {
   const [dishes, setDishes] = useState([]);
@@ -466,7 +518,7 @@ function Admscreen() {
         </View>
         
 
-        <TouchableOpacity style={styles.submitButton} onPress={editingDish ? saveEditItem : addItem}>
+        <TouchableOpacity style={styles.submitButton2} onPress={editingDish ? saveEditItem : addItem}>
           <Text style={styles.submitButtonText}>{editingDish ? "Salvar" : "Adicionar"}</Text>
         </TouchableOpacity>
         </View>
@@ -487,13 +539,13 @@ export default function App() {
           options={{ title: '' }} 
           name="Login" component={LoginScreen} />
         <Stack.Screen 
-          options={{ title: 'Fazer Pedido' }}
+          options={{ title: 'Anotar Pedido' }}
           name="Customer" component={CustomerScreen} />
         <Stack.Screen 
           options={{ title: 'Acompanhar Pedidos' }}
           name="Restaurante" component={RestaurantScreen} />
         <Stack.Screen 
-          options={{ title: 'Administrador' }}
+          options={{ title: 'Cardápio' }}
           name="administrador" component={Admscreen} />
       </Stack.Navigator>
     </NavigationContainer>
@@ -504,18 +556,27 @@ export default function App() {
 const styles = StyleSheet.create({
   container: { 
     flex: 1, 
-    padding: 70,
+    padding:20,
     alignItems: 'center', 
     backgroundColor: '#F8C471',
   },
 
-  restaurantcontainer: { 
-    flex: 1, 
+  restaurantcontainer: {
+    flex: 1,
     padding: 20,
     backgroundColor: '#F8C471',
+    alignItems: 'center',
   },
 
-  title: { 
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 10,
+    color: '#000',
+    textAlign: 'center',
+  },
+  
+    title: { 
     fontSize: 24, 
     fontWeight: 'bold', 
     marginBottom: 20, 
@@ -542,7 +603,7 @@ const styles = StyleSheet.create({
   }, 
   input3: { 
     width: '80%', 
-    height: 40,
+    height: Platform.OS === 'android' ? 53 : 40, 
     padding: 10,
     marginBottom: 10, 
     backgroundColor: '#fff',
@@ -572,6 +633,13 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     marginBottom: 20,
     marginTop: 20
+  },
+  submitButton2: { 
+    backgroundColor: '#464646', 
+    padding: 10, 
+    borderRadius: 20,
+    marginBottom: 0,
+    marginTop: 5
   }, 
   submitButtonText: { 
     color: '#fff', 
@@ -579,30 +647,52 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     fontWeight: 'bold',
   }, 
-  orderItem: { 
-    padding: 15, 
-    borderWidth: 1, 
-    borderRadius: 20, 
-    marginBottom: 10, 
-    width: '100%', 
+    orderItem: {
+    flex: 1, // Permite que o card cresça de acordo com a largura disponível
+    padding: 10,
+    borderWidth: 1,
+    borderRadius: 8,
+    margin: 5,
     backgroundColor: '#530A0A',
+    alignItems: 'flex-start',
+    maxWidth: '48%', // Para evitar cards muito largos
+  },
+
+  statusContainer: {
+    flexDirection: 'row', // Alinha texto e botão lado a lado
     alignItems: 'center',
-  }, 
+    justifyContent: 'space-between', // Espaço entre texto e botão
+    width: '100%',
+  },
+
+  deliveredOrderItem: {
+    backgroundColor: '#464646',
+  },
   itemText: { 
-    fontSize: 18, 
+    fontSize: 10, 
     color: '#fff',
+    fontWeight: 'bold'
   }, 
-  statusText: { 
+   statusText: { 
     marginVertical: 5, 
-    fontSize: 16, 
+    fontSize: 13, // Aumentar tamanho para dar destaque
     fontStyle: 'italic', 
-    color: '#fff',
+    color: '#FFDD44', // Cor diferente para destacar o status
+    fontWeight: 'bold',
   }, 
   statusButton: {  
-    padding: 10, 
+    padding: 0, 
     borderRadius: 5, 
-    marginTop: 10, 
+    marginTop: 0, 
     width: 80,
+  },
+   orderDescription: {
+    backgroundColor: '#333',
+    padding: 10,
+    borderRadius: 8,
+    marginVertical: 10,
+    width: '90%',
+    alignItems: 'flex-start', // Alinhar texto à esquerda
   },
   statusButtonText: { 
     color: '#fff', 
@@ -616,10 +706,11 @@ const styles = StyleSheet.create({
     padding: 10,
   },
   picker2: { 
-    height: 40, 
+    height: Platform.OS === 'android' ? 10 : 40, 
     width: 150,
-    backgroundColor: '#fff',
     padding: 10,
+    marginBottom: 10,
+    backgroundColor: '#fff',
   },
   picker3: { 
     height: 40, 
@@ -698,7 +789,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     alignItems: 'center',
   },
-  // Adicionando estilo específico para o texto do título na Admscreen
+
   admscreenTitle: {
     padding: 10,
     fontSize: 18,
