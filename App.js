@@ -112,10 +112,9 @@ function CustomerScreen() {
         const parsedDishes = JSON.parse(storedDishes);
         setDishes(parsedDishes);
         if (parsedDishes.length > 0) {
-          setPickValue(parsedDishes[0].name); // Inicializa a seleção com o primeiro prato
+          setPickValue(parsedDishes[0].name);
         }
       } else {
-        // Se não há pratos salvos, inicializa com o padrão
         const initialDishes = defaultDishes.map(dish => ({ name: dish.name, price: dish.price }));
         setDishes(initialDishes);
         await AsyncStorage.setItem('dishes', JSON.stringify(initialDishes));
@@ -188,24 +187,24 @@ function CustomerScreen() {
   };
 
   const handleSubmit = () => {
-  if (nome !== "") {
-    if (items.length > 0) {
-      const orderDescription = `
-        Pedido de: ${nome}
-        Mesa: ${tableValue}
-        Itens: ${pedidoCompleto}
-        Total: R$${totalOrder.toFixed(2)}
-      `;
-      backendAddOrder(orderDescription); // Envia o pedido ao backend
-      alert(`O pedido de ${nome} mesa ${tableValue} foi enviado: ${pedidoCompleto}`);
-      resetOrder();
+    if (nome !== "") {
+      if (items.length > 0) {
+        const orderDescription = `
+          Pedido de: ${nome}z
+          Mesa: ${tableValue}
+          Itens: ${pedidoCompleto}
+          Total: R$${totalOrder.toFixed(2)}
+        `;
+        backendAddOrder(orderDescription);
+        alert(`O pedido de ${nome} mesa ${tableValue} foi enviado: ${pedidoCompleto}`);
+        resetOrder();
+      } else {
+        alert('Escolha seu pedido!');
+      }
     } else {
-      alert('Escolha seu pedido!');
+      alert('Digite um nome!');
     }
-  } else {
-    alert('Digite um nome!');
-  }
-};
+  };
 
   const resetOrder = () => {
     setNome('');
@@ -239,7 +238,7 @@ function CustomerScreen() {
         <Picker
           selectedValue={tableValue}
           onValueChange={(value) => setTablevalue(value)}
-          style={styles.picker2}
+          style={Platform.OS === 'ios' ? styles.iosPicker : styles.picker2}
         >
           {Tables.map((table, index) => (
             <Picker.Item key={index} label={`Mesa ${table}`} value={table} />
@@ -251,13 +250,15 @@ function CustomerScreen() {
           placeholder="Nome do cliente"
           value={nome}
           onChangeText={setNome}
+          keyboardType="default"
+          returnKeyType="done" // Facilita a integração no iOS
         />
       </View>
 
       <Picker
         selectedValue={pickValue}
         onValueChange={(value) => setPickValue(value)}
-        style={styles.picker3}
+        style={Platform.OS === 'ios' ? styles.iosPicker : styles.picker3}
       >
         {dishes.map((dish, index) => (
           <Picker.Item key={index} label={`${dish.name} - R$: ${dish.price.toFixed(2)}`} value={dish.name} />
@@ -600,7 +601,13 @@ const styles = StyleSheet.create({
     borderRadius: 5, 
     backgroundColor: '#fff',
     width: 220,
-  }, 
+  },
+  iosPicker: {
+    height: 50,
+    width: 150,
+    backgroundColor: '#fff',
+    marginBottom: 10,
+  },
   input3: { 
     width: '80%', 
     height: Platform.OS === 'android' ? 53 : 40, 
