@@ -9,6 +9,7 @@ import {
   Button,
   TouchableOpacity,
   FlatList,
+  Platform
 } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
@@ -19,13 +20,14 @@ import Objects from './Objetcs';
 
 const Stack = createStackNavigator();
 
-// Sample Dishes
-const Dishes = [
-  new Objects('Pastel de Frango', 5.50),
-  new Objects('Pastel de Carne', 6.20),
-  new Objects('Pastel de Queijo', 4.10),
-  new Objects('Pastel de Pizza', 7.70),
-  new Objects('Coca-cola', 7.70),
+// Pratos padrão
+const defaultDishes = [
+  { name: 'Pastel de Frango', price: 5.50 },
+  { name: 'Pastel de Carne', price: 6.20 },
+  { name: 'Pastel de Queijo', price: 4.10 },
+  { name: 'Pastel de Pizza', price: 7.70 },
+  { name: 'Caldo de Cana', price: 8.30 },
+  { name: 'Coca-cola', price: 7.70 },
 ];
 
 const Tables = [
@@ -37,46 +39,53 @@ const Tables = [
   '06',
 ];
 
+// Função para inicializar pratos padrão no AsyncStorage
+const initializeDefaultDishes = async () => {
+  try {
+    const storedDishes = await AsyncStorage.getItem('dishes');
+    if (!storedDishes) {
+      await AsyncStorage.setItem('dishes', JSON.stringify(defaultDishes));
+    }
+  } catch (error) {
+    console.error('Error initializing default dishes:', error);
+  }
+};
+
 // Login Screen Component
 function LoginScreen({ navigation }) {
+  useEffect(() => {
+    initializeDefaultDishes();
+  }, []);
+
   const handleLogin = (userType) => {
-    switch(userType)
-    {
+    switch(userType) {
       case 'cliente':
         navigation.navigate('Customer');
-      break;
-
+        break;
       case 'restaurante':
         navigation.navigate('Restaurante');
-      break;
-
+        break;
       case 'administrador':
         navigation.navigate('administrador');
-      break;
+        break;
     }
   };
 
   return (
     <View style={styles.container}>
-
-      <View >
-
-      <Image source={require('./assets/pastelarialogo.png')}
-      style={styles.logo}
-      />
-
-      <TouchableOpacity style={styles.buttonlarge} onPress={() => handleLogin('cliente')} >
-        <Text style={styles.submitButtonText}>Fazer Pedido</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity style={styles.buttonlarge} onPress={() => handleLogin('restaurante')} >
-        <Text style={styles.submitButtonText}>Acompanhar Pedidos</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity style={styles.buttonlarge} onPress={() => handleLogin('administrador')} >
-        <Text style={styles.submitButtonText}>Administrador</Text>
-      </TouchableOpacity>
-
+      <View>
+        <Image source={require('./assets/pastelarialogo.png')}
+          style={styles.logo}
+        />
+        <TouchableOpacity style={styles.buttonlarge} onPress={() => handleLogin('cliente')} >
+          <Text style={styles.submitButtonText}>Anotar Pedido</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.buttonlarge} onPress={() => handleLogin('restaurante')} >
+          <Text style={styles.submitButtonText}>Acompanhar Pedidos</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.buttonlarge} onPress={() => handleLogin('administrador')} >
+          <Text style={styles.submitButtonText}>Cardápio</Text>
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -103,10 +112,9 @@ function CustomerScreen() {
         const parsedDishes = JSON.parse(storedDishes);
         setDishes(parsedDishes);
         if (parsedDishes.length > 0) {
-          setPickValue(parsedDishes[0].name); // Inicializa a seleção com o primeiro prato
+          setPickValue(parsedDishes[0].name);
         }
       } else {
-        // Se não há pratos salvos, inicializa com o padrão
         const initialDishes = defaultDishes.map(dish => ({ name: dish.name, price: dish.price }));
         setDishes(initialDishes);
         await AsyncStorage.setItem('dishes', JSON.stringify(initialDishes));
@@ -118,8 +126,6 @@ function CustomerScreen() {
       console.error('Error loading dishes:', error);
     }
   };
-
-  // Restante do código da tela CustomerScreen...
 
   const addItem = () => {
     const currentItem = dishes.find(dish => dish.name === pickValue);
@@ -183,8 +189,13 @@ function CustomerScreen() {
   const handleSubmit = () => {
     if (nome !== "") {
       if (items.length > 0) {
-        const orderDescription = `Pedido de ${nome} mesa ${tableValue} - ${pedidoCompleto} - Total: R$${totalOrder.toFixed(2)}`;
-        backendAddOrder(orderDescription); // Envia o pedido ao backend
+        const orderDescription = `
+          Pedido de: ${nome}z
+          Mesa: ${tableValue}
+          Itens: ${pedidoCompleto}
+          Total: R$${totalOrder.toFixed(2)}
+        `;
+        backendAddOrder(orderDescription);
         alert(`O pedido de ${nome} mesa ${tableValue} foi enviado: ${pedidoCompleto}`);
         resetOrder();
       } else {
@@ -227,7 +238,7 @@ function CustomerScreen() {
         <Picker
           selectedValue={tableValue}
           onValueChange={(value) => setTablevalue(value)}
-          style={{ width: 80, marginBottom: 20, backgroundColor: '#fff', borderRadius: 5 }}
+          style={Platform.OS === 'ios' ? styles.iosPicker : styles.picker2}
         >
           {Tables.map((table, index) => (
             <Picker.Item key={index} label={`Mesa ${table}`} value={table} />
@@ -235,17 +246,19 @@ function CustomerScreen() {
         </Picker>
 
         <TextInput
-          style={styles.input}
+          style={styles.input3}
           placeholder="Nome do cliente"
           value={nome}
           onChangeText={setNome}
+          keyboardType="default"
+          returnKeyType="done" // Facilita a integração no iOS
         />
       </View>
 
       <Picker
         selectedValue={pickValue}
         onValueChange={(value) => setPickValue(value)}
-        style={styles.picker}
+        style={Platform.OS === 'ios' ? styles.iosPicker : styles.picker3}
       >
         {dishes.map((dish, index) => (
           <Picker.Item key={index} label={`${dish.name} - R$: ${dish.price.toFixed(2)}`} value={dish.name} />
@@ -287,51 +300,96 @@ function CustomerScreen() {
 
 // Restaurant Screen Component
 function RestaurantScreen() {
-  const [orders, setOrders] = useState([]);
+  const [activeOrders, setActiveOrders] = useState([]);
+  const [deliveredOrders, setDeliveredOrders] = useState([]);
 
   useEffect(() => {
-    setOrders(getOrders());
-    const interval = setInterval(() => {
-      setOrders(getOrders());
-    }, 3000);
+    const fetchData = () => {
+      const allOrders = getOrders();
+      const ongoingOrders = allOrders.filter(order => order.status !== 'Entregue');
+      const completedOrders = allOrders.filter(order => order.status === 'Entregue');
+
+      const renumberedActiveOrders = ongoingOrders.map((order, index) => ({
+        ...order,
+        displayId: index + 1,
+      }));
+
+      setActiveOrders(renumberedActiveOrders);
+      setDeliveredOrders(completedOrders);
+    };
+
+    fetchData();
+    const interval = setInterval(fetchData);
     return () => clearInterval(interval);
   }, []);
 
   const handleStatusChange = (id) => {
     updateOrderStatus(id);
-    setOrders(getOrders()); // Atualiza a lista de pedidos após a mudança de status
+    setActiveOrders(prevOrders => {
+      const updatedActiveOrders = prevOrders.filter(order => order.id !== id);
+      const updatedDeliveredOrders = [...deliveredOrders, ...prevOrders.filter(order => order.id === id)];
+
+      setDeliveredOrders(updatedDeliveredOrders.map(order => ({ ...order, status: 'Entregue' })));
+      return updatedActiveOrders.map((order, index) => ({
+        ...order,
+        displayId: index + 1,
+      }));
+    });
   };
 
   const renderOrder = ({ item }) => (
     <View key={item.id} style={styles.orderItem}>
-      <Text style={styles.itemText}>{item.id}. {item.description}</Text>
+      <Text style={styles.itemText}>
+        {item.displayId}. {item.description}
+      </Text>
+      <View style={styles.statusContainer}>
+        <Text style={styles.statusText}>Status: {item.status}</Text>
+        {item.status !== 'Entregue' && (
+          <TouchableOpacity style={styles.statusButton} onPress={() => handleStatusChange(item.id)}>
+            <Image
+              source={require('./assets/reloadicon.png')}
+              style={{ width: 25, height: 25 }} // Tamanho reduzido
+            />
+          </TouchableOpacity>
+        )}
+      </View>
+    </View>
+  );
+
+  const renderDeliveredOrder = ({ item }) => (
+    <View key={item.id} style={[styles.orderItem, styles.deliveredOrderItem]}>
+      <Text style={styles.itemText}>
+        {item.id}. {item.description}
+      </Text>
       <Text style={styles.statusText}>Status: {item.status}</Text>
-      {item.status !== 'Entregue' && (
-        <TouchableOpacity style={styles.statusButton} onPress={() => handleStatusChange(item.id)}>
-          <Image source={require('./assets/reloadicon.png')}
-      style={ 
-        {
-          width: 50,
-          height: 50,
-        }}
-      />
-        </TouchableOpacity>
-      )}
     </View>
   );
 
   return (
     <View style={styles.restaurantcontainer}>
+      <Text style={styles.sectionTitle}>Pedidos Ativos</Text>
       <FlatList
-      style={styles.list}
-        data={orders}
+        style={styles.list}
+        data={activeOrders}
         renderItem={renderOrder}
-        keyExtractor={(item) => item.id.toString()} // Gera uma chave única baseada no ID
-        contentContainerStyle={{ paddingBottom: 20 }} // Espaço no final para facilitar a rolagem
+        keyExtractor={(item) => item.id.toString()}
+        numColumns={2} // Permite múltiplos cards por linha
+        contentContainerStyle={{ paddingBottom: 5 }}
+      />
+      
+      <Text style={styles.sectionTitle}>Pedidos Entregues</Text>
+      <FlatList
+        style={styles.list}
+        data={deliveredOrders}
+        renderItem={renderDeliveredOrder}
+        keyExtractor={(item) => item.id.toString()}
+        numColumns={2} // Permite múltiplos cards por linha
+        contentContainerStyle={{ paddingBottom: 20 }}
       />
     </View>
   );
 }
+
 
 function Admscreen() {
   const [dishes, setDishes] = useState([]);
@@ -437,32 +495,35 @@ function Admscreen() {
           style={styles.list}
           testID="lista"
         />
-
-        <Text style={styles.title}>
+      </View>
+    
+      <View style={styles.editpanels2}>
+        <Text style={styles.admscreenTitle}>
           {editingDish ? "Editar prato" : "Adicionar novo prato"}
         </Text>
 
         <View style={styles.formRow}>
           <TextInput
-            style={styles.input}
+            style={styles.input2}
             placeholder="Nome do prato"
             value={editingDish ? editingDish.name : newDish.name}
             onChangeText={(text) => editingDish ? setEditingDish({...editingDish, name: text}) : setNewDish({...newDish, name: text})}
           />
           <TextInput
-            style={styles.input}
+            style={styles.input2}
             placeholder="Preço do prato"
             value={editingDish ? editingDish.price : newDish.price}
             keyboardType="numeric"
             onChangeText={(text) => editingDish ? setEditingDish({...editingDish, price: text}) : setNewDish({...newDish, price: text})}
           />
         </View>
+        
 
-        <TouchableOpacity style={styles.submitButton} onPress={editingDish ? saveEditItem : addItem}>
+        <TouchableOpacity style={styles.submitButton2} onPress={editingDish ? saveEditItem : addItem}>
           <Text style={styles.submitButtonText}>{editingDish ? "Salvar" : "Adicionar"}</Text>
         </TouchableOpacity>
+        </View>
       </View>
-    </View>
   );
 }
 
@@ -472,43 +533,21 @@ export default function App() {
     <NavigationContainer>
       <Stack.Navigator initialRouteName="Login" 
       screenOptions={{
-
         headerStyle: {backgroundColor: '#530A0A'},
-
         headerTintColor: '#fff'
-      }}
-      
-      >
+      }}>
         <Stack.Screen 
-        options={
-          {
-            title: '',
-          }     
-        }
-        
-        name="Login" component={LoginScreen} />
+          options={{ title: '' }} 
+          name="Login" component={LoginScreen} />
         <Stack.Screen 
-        options={
-          {
-            title: 'Fazer Pedido',
-          }
-        }
-         name="Customer" component={CustomerScreen} />
+          options={{ title: 'Anotar Pedido' }}
+          name="Customer" component={CustomerScreen} />
         <Stack.Screen 
-        options={
-          {
-            title: 'Acompanhar Pedidos',
-          }
-        }
-        name="Restaurante" component={RestaurantScreen} />
-
+          options={{ title: 'Acompanhar Pedidos' }}
+          name="Restaurante" component={RestaurantScreen} />
         <Stack.Screen 
-        options={
-          {
-            title: 'Administrador',
-          }
-        }
-         name="administrador" component={Admscreen} />
+          options={{ title: 'Cardápio' }}
+          name="administrador" component={Admscreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );
@@ -518,18 +557,27 @@ export default function App() {
 const styles = StyleSheet.create({
   container: { 
     flex: 1, 
-    padding: 70,
+    padding:20,
     alignItems: 'center', 
     backgroundColor: '#F8C471',
   },
 
-  restaurantcontainer: { 
-    flex: 1, 
+  restaurantcontainer: {
+    flex: 1,
     padding: 20,
     backgroundColor: '#F8C471',
+    alignItems: 'center',
   },
 
-  title: { 
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 10,
+    color: '#000',
+    textAlign: 'center',
+  },
+  
+    title: { 
     fontSize: 24, 
     fontWeight: 'bold', 
     marginBottom: 20, 
@@ -543,6 +591,31 @@ const styles = StyleSheet.create({
     borderRadius: 5, 
     backgroundColor: '#fff',
     width: 220,
+  }, 
+  input2: { 
+    width: '80%', 
+    padding: 10,
+    borderWidth: 1, 
+    borderColor: '#ccc', 
+    marginBottom: 10, 
+    borderRadius: 5, 
+    backgroundColor: '#fff',
+    width: 220,
+  },
+  iosPicker: {
+    height: 50,
+    width: 150,
+    backgroundColor: '#fff',
+    marginBottom: 10,
+  },
+  input3: { 
+    width: '80%', 
+    height: Platform.OS === 'android' ? 53 : 40, 
+    padding: 10,
+    marginBottom: 10, 
+    backgroundColor: '#fff',
+    width: 220,
+    
   }, 
   buttonlarge: { 
     marginBottom: 30,
@@ -567,6 +640,13 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     marginBottom: 20,
     marginTop: 20
+  },
+  submitButton2: { 
+    backgroundColor: '#464646', 
+    padding: 10, 
+    borderRadius: 20,
+    marginBottom: 0,
+    marginTop: 5
   }, 
   submitButtonText: { 
     color: '#fff', 
@@ -574,30 +654,52 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     fontWeight: 'bold',
   }, 
-  orderItem: { 
-    padding: 15, 
-    borderWidth: 1, 
-    borderRadius: 20, 
-    marginBottom: 10, 
-    width: '100%', 
+    orderItem: {
+    flex: 1, // Permite que o card cresça de acordo com a largura disponível
+    padding: 10,
+    borderWidth: 1,
+    borderRadius: 8,
+    margin: 5,
     backgroundColor: '#530A0A',
+    alignItems: 'flex-start',
+    maxWidth: '48%', // Para evitar cards muito largos
+  },
+
+  statusContainer: {
+    flexDirection: 'row', // Alinha texto e botão lado a lado
     alignItems: 'center',
-  }, 
+    justifyContent: 'space-between', // Espaço entre texto e botão
+    width: '100%',
+  },
+
+  deliveredOrderItem: {
+    backgroundColor: '#464646',
+  },
   itemText: { 
-    fontSize: 18, 
+    fontSize: 10, 
     color: '#fff',
+    fontWeight: 'bold'
   }, 
-  statusText: { 
+   statusText: { 
     marginVertical: 5, 
-    fontSize: 16, 
+    fontSize: 13, // Aumentar tamanho para dar destaque
     fontStyle: 'italic', 
-    color: '#fff',
+    color: '#FFDD44', // Cor diferente para destacar o status
+    fontWeight: 'bold',
   }, 
   statusButton: {  
-    padding: 10, 
+    padding: 0, 
     borderRadius: 5, 
-    marginTop: 10, 
+    marginTop: 0, 
     width: 80,
+  },
+   orderDescription: {
+    backgroundColor: '#333',
+    padding: 10,
+    borderRadius: 8,
+    marginVertical: 10,
+    width: '90%',
+    alignItems: 'flex-start', // Alinhar texto à esquerda
   },
   statusButtonText: { 
     color: '#fff', 
@@ -610,18 +712,29 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     padding: 10,
   },
+  picker2: { 
+    height: Platform.OS === 'android' ? 10 : 40, 
+    width: 150,
+    padding: 10,
+    marginBottom: 10,
+    backgroundColor: '#fff',
+  },
+  picker3: { 
+    height: 40, 
+    width: 370,
+    backgroundColor: '#fff',
+    padding: 10,
+  },
   selectedValue: { 
     marginTop: 20, 
     fontSize: 18, 
   }, 
   list: { 
     padding: 5,
-    width: 300,
-    // Aumentando a altura da lista para permitir mais espaço para scroll
+    width: '100%',
     height: 200, 
     borderRadius: 20,
     alignSelf: 'center',
-    width: '99%',
   }, 
   item: { 
     flexDirection: 'row',
@@ -632,7 +745,6 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   btn: {
-    backgroundColor: '#007bff', 
     width: 20,
     height: 30,
     backgroundColor: '#fff',
@@ -644,10 +756,9 @@ const styles = StyleSheet.create({
     alignSelf: 'center', 
   },
   textfield: {
-    backgroundColor: '#007bff', 
+    backgroundColor: '#e2e2e2',
     width: 40,
     height: 30,
-    backgroundColor: '#e2e2e2',
     borderRadius: 5,
     borderWidth: 1,
   },
@@ -669,8 +780,28 @@ const styles = StyleSheet.create({
     backgroundColor: '#530A0A', 
     padding: 15,
     width: 300,
-    height: '70%', // Aumentando o espaço total para incluir o título, lista e botões
+    height: '50%',
     borderRadius: 20,
     alignItems: 'center',
+    marginBottom: 20
+  },
+
+  editpanels2: {
+    borderWidth: 2,
+    borderColor: '#fff',
+    backgroundColor: '#530A0A', 
+    padding: 15,
+    width: 300,
+    height: '40%',
+    borderRadius: 20,
+    alignItems: 'center',
+  },
+
+  admscreenTitle: {
+    padding: 10,
+    fontSize: 18,
+    color: '#F8C471', // Cor de fundo padrão
+    fontWeight: 'bold',
+    textAlign: 'center',
   },
 });
