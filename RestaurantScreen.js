@@ -1,103 +1,113 @@
-import React, { useEffect, useState } from 'react';
-import { StyleSheet, Text, View, FlatList, TouchableOpacity } from 'react-native';
-import { getOrders, updateOrderStatus } from './ordersBackend'; // Certifique-se de que o caminho está correto
+import React, { useState, useEffect } from 'react';
+import {
+  StyleSheet,
+  Text,
+  ScrollView,
+  View,
+  Image,
+  TextInput,
+  Button,
+  TouchableOpacity,
+  FlatList,
+  Platform
+} from 'react-native';
+import { NavigationContainer } from '@react-navigation/native';
+import CustomerScreen from './CustomerScreen';
+import { createStackNavigator } from '@react-navigation/stack';
+import { addOrder as backendAddOrder, getOrders, updateOrderStatus } from './ordersBackend';
+import { Picker } from '@react-native-picker/picker';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import Objects from './Objetcs';
+import styles from './styles';
 
 export default function RestaurantScreen({ navigation }) {
-  const [orders, setOrders] = useState([]);
+  
+  const [activeOrders, setActiveOrders] = useState([]);
+  const [deliveredOrders, setDeliveredOrders] = useState([]);
 
-  // Carrega pedidos ao montar o componente
   useEffect(() => {
-    const loadOrders = () => {
-      const initialOrders = getOrders(); // Obtém pedidos do backend
-      setOrders(initialOrders);   
+    const fetchData = () => {
+      const allOrders = getOrders();
+      const ongoingOrders = allOrders.filter(order => order.status !== 'Entregue');
+      const completedOrders = allOrders.filter(order => order.status === 'Entregue');
+
+      const renumberedActiveOrders = ongoingOrders.map((order, index) => ({
+        ...order,
+        displayId: index + 1,
+      }));
+
+      setActiveOrders(renumberedActiveOrders);
+      setDeliveredOrders(completedOrders);
     };
 
-    loadOrders(); // Carrega pedidos ao montar o componente
-
-    const interval = setInterval(loadOrders, 3000); // Atualiza a cada 3 segundos
-    return () => clearInterval(interval); // Limpa o intervalo ao desmontar o componente
+    fetchData();
+    const interval = setInterval(fetchData);
+    return () => clearInterval(interval);
   }, []);
 
   const handleStatusChange = (id) => {
-    updateOrderStatus(id); // Atualiza o status do pedido no backend
-    setOrders(getOrders()); // Atualiza a lista de pedidos local
+    updateOrderStatus(id);
+    setActiveOrders(prevOrders => {
+      const updatedActiveOrders = prevOrders.filter(order => order.id !== id);
+      const updatedDeliveredOrders = [...deliveredOrders, ...prevOrders.filter(order => order.id === id)];
+
+      setDeliveredOrders(updatedDeliveredOrders.map(order => ({ ...order, status: 'Entregue' })));
+      return updatedActiveOrders.map((order, index) => ({
+        ...order,
+        displayId: index + 1,
+      }));
+    });
   };
 
-  return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Restaurante - Gerenciamento de Pedidos</Text>
-      <FlatList
-        data={orders}
-        renderItem={({ item }) => (
-          <View style={styles.orderItem}>
-            <Text style={styles.itemText}>{item.id}. {item.description}</Text>
-            <Text style={styles.statusText}>Status: {item.status}</Text>
-            {item.status !== 'Entregue' && (
-              <TouchableOpacity
-                style={styles.statusButton}
-                onPress={() => handleStatusChange(item.id)}
-              >
-                <Text style={styles.statusButtonText}>Atualizar Status</Text>
-              </TouchableOpacity>
-            )}
-          </View>
+  const renderOrder = ({ item }) => (
+    <View key={item.id} style={styles.orderItem}>
+      <Text style={styles.itemText}>
+        {item.displayId}. {item.description}
+      </Text>
+      <View style={styles.statusContainer}>
+        <Text style={styles.statusText}>Status: {item.status}</Text>
+        {item.status !== 'Entregue' && (
+          <TouchableOpacity style={styles.statusButton} onPress={() => handleStatusChange(item.id)}>
+            <Image
+              source={require('./assets/reloadicon.png')}
+              style={{ width: 25, height: 25 }} // Tamanho reduzido
+            />
+          </TouchableOpacity>
         )}
+      </View>
+    </View>
+  );
+
+  const renderDeliveredOrder = ({ item }) => (
+    <View key={item.id} style={[styles.orderItem, styles.deliveredOrderItem]}>
+      <Text style={styles.itemText}>
+        {item.id}. {item.description}
+      </Text>
+      <Text style={styles.statusText}>Status: {item.status}</Text>
+    </View>
+  );
+
+  return (
+    <View style={styles.restaurantcontainer}>
+      <Text style={styles.sectionTitle}>Pedidos Ativos</Text>
+      <FlatList
+        style={styles.list}
+        data={activeOrders}
+        renderItem={renderOrder}
         keyExtractor={(item) => item.id.toString()}
+        numColumns={2} // Permite múltiplos cards por linha
+        contentContainerStyle={{ paddingBottom: 5 }}
       />
-      <TouchableOpacity style={styles.button} onPress={() => navigation.navigate('Customer')}>
-        <Text style={styles.buttonText}>Ir para Tela do Cliente</Text>
-      </TouchableOpacity>
+      
+      <Text style={styles.sectionTitle}>Pedidos Entregues</Text>
+      <FlatList
+        style={styles.list}
+        data={deliveredOrders}
+        renderItem={renderDeliveredOrder}
+        keyExtractor={(item) => item.id.toString()}
+        numColumns={2} // Permite múltiplos cards por linha
+        contentContainerStyle={{ paddingBottom: 20 }}
+      />
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#f0f0f0',
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 20,
-  },
-  orderItem: {
-    backgroundColor: '#fff',
-    padding: 15,
-    marginBottom: 10,
-    borderRadius: 10,
-    width: '90%',
-  },
-  itemText: {
-    fontSize: 18,
-  },
-  statusText: {
-    fontSize: 16,
-    color: '#777',
-    marginVertical: 5,
-  },
-  statusButton: {
-    backgroundColor: '#007bff',
-    paddingVertical: 8,
-    borderRadius: 5,
-    marginTop: 10,
-  },
-  statusButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    textAlign: 'center',
-  },
-  button: {
-    marginTop: 20,
-    padding: 15,
-    backgroundColor: '#28a745',
-    borderRadius: 5,
-  },
-  buttonText: {
-    color: '#fff',
-    fontSize: 16,
-    textAlign: 'center',
-  },
-});
